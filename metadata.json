@@ -1,0 +1,8 @@
+{
+  "name": "Remix SpotOn – Alcohol \u0026 Tobacco Spending Tracker",
+  "description": "A clear, friendly, non-judgmental spending tracker for alcohol and tobacco with timelines, patterns, and privacy-first local storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
