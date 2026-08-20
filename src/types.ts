@@ -37,6 +37,8 @@ export interface AppSettings {
   pinCode?: string;
   theme: 'light' | 'dark' | 'system';
   onboardingCompleted: boolean;
+  dailyReminderEnabled?: boolean;
+  dailyReminderTime?: string; // e.g. '20:00'
 }
 
 export type NavigationTab = 'home' | 'timeline' | 'insights' | 'export';

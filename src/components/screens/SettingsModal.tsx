@@ -8,6 +8,7 @@ import {
   Moon,
   Sun,
   Laptop,
+  Palette,
   Lock,
   RefreshCw,
   Trash2,
@@ -19,6 +20,10 @@ import {
   HardDrive,
   LogOut,
   FolderSync,
+  Bell,
+  BellRing,
+  Clock,
+  Send,
 } from 'lucide-react';
 import { useSpotOn } from '../../context/SpotOnContext';
 import { CURRENCY_OPTIONS, PLACES_LIST } from '../../data/defaultPresets';
@@ -46,12 +51,16 @@ export const SettingsModal: React.FC = () => {
     loginWithGoogle,
     logoutFromGoogle,
     backupToDrive,
+    notificationPermission,
+    toggleDailyReminder,
+    sendTestNotification,
   } = useSpotOn();
 
   // Local state for budget input
   const [budgetInput, setBudgetInput] = useState<string>(settings.monthlyBudget.toString());
   const [pinInput, setPinInput] = useState<string>(settings.pinCode || '1234');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   // New Preset state
   const [isAddingPreset, setIsAddingPreset] = useState(false);
@@ -316,7 +325,138 @@ export const SettingsModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Section 2: Budget */}
+            {/* Section 2: Daily Reminder */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <Bell className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <span>Daily Reminders</span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-850 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-4">
+                {/* Reminder Toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-sm text-slate-900 dark:text-white block">
+                      Daily tracking reminder
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      Get a browser notification to log today's purchases
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleDailyReminder(!settings.dailyReminderEnabled)}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                      settings.dailyReminderEnabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    aria-label="Toggle daily reminder"
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        settings.dailyReminderEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Expanded Reminder Controls */}
+                {settings.dailyReminderEnabled && (
+                  <div className="border-t border-slate-200/60 dark:border-slate-800 pt-3.5 space-y-3.5">
+                    {/* Permission Status Pill */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 dark:text-slate-400 font-medium">Browser Permission</span>
+                      {notificationPermission === 'granted' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                          Permission Granted
+                        </span>
+                      ) : notificationPermission === 'denied' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/40">
+                          Blocked in Browser
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                          Prompt on First Alert
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Time Picker */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Reminder Time
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="time"
+                            value={settings.dailyReminderTime || '20:00'}
+                            onChange={(e) => {
+                              const newTime = e.target.value;
+                              updateSettings({ dailyReminderTime: newTime });
+                            }}
+                            className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono font-semibold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Quick Time Preset Pills */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="text-[10px] text-slate-400 font-medium mr-1">Presets:</span>
+                        {[
+                          { label: '6:00 PM', value: '18:00' },
+                          { label: '8:00 PM', value: '20:00' },
+                          { label: '9:30 PM', value: '21:30' },
+                          { label: '10:00 PM', value: '22:00' },
+                        ].map((preset) => {
+                          const isSelected = (settings.dailyReminderTime || '20:00') === preset.value;
+                          return (
+                            <button
+                              key={preset.value}
+                              type="button"
+                              onClick={() => {
+                                updateSettings({ dailyReminderTime: preset.value });
+                                showToast(`Reminder set for ${preset.label}`);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white font-bold'
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Test Button & Explanation */}
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                        Uses Web Notifications. Clicking the alert opens quick-entry directly.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsSendingTest(true);
+                          await sendTestNotification();
+                          setIsSendingTest(false);
+                        }}
+                        disabled={isSendingTest}
+                        className="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 font-semibold text-xs flex items-center gap-1.5 shrink-0 transition active:scale-95 disabled:opacity-50"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        <span>{isSendingTest ? 'Sending...' : 'Test Alert'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section 3: Budget */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <Wallet className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -378,7 +518,123 @@ export const SettingsModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Section 3: General */}
+            {/* Section: Appearance & Theme */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  <Palette className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Appearance & Theme</span>
+                </div>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  {settings.theme === 'system'
+                    ? 'System Default'
+                    : settings.theme === 'dark'
+                    ? 'Dark (Override)'
+                    : 'Light (Override)'}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-850 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-4">
+                {/* Manual Dark Mode Direct Toggle Switch */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-sm text-slate-900 dark:text-white block">
+                      Dark Mode
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {settings.theme === 'system'
+                        ? 'Currently set to auto-match system preferences'
+                        : settings.theme === 'dark'
+                        ? 'Manual dark mode override enabled'
+                        : 'Manual light mode override enabled'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextTheme = settings.theme === 'dark' ? 'light' : 'dark';
+                      updateSettings({ theme: nextTheme });
+                      showToast(nextTheme === 'dark' ? 'Dark mode enabled' : 'Light mode enabled');
+                    }}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                      settings.theme === 'dark' ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    aria-label="Toggle dark mode override"
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        settings.theme === 'dark' ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Theme Mode Selector Cards */}
+                <div className="border-t border-slate-200/60 dark:border-slate-800 pt-3">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Theme Preference
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Light Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateSettings({ theme: 'light' });
+                        showToast('Light mode active');
+                      }}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition text-center ${
+                        settings.theme === 'light'
+                          ? 'bg-white dark:bg-slate-800 border-blue-500 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20 font-bold shadow-xs'
+                          : 'bg-white/70 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <Sun className="w-5 h-5 text-amber-500" />
+                      <span className="text-xs font-semibold">Light</span>
+                    </button>
+
+                    {/* Dark Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateSettings({ theme: 'dark' });
+                        showToast('Dark mode active');
+                      }}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition text-center ${
+                        settings.theme === 'dark'
+                          ? 'bg-white dark:bg-slate-800 border-blue-500 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20 font-bold shadow-xs'
+                          : 'bg-white/70 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <Moon className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                      <span className="text-xs font-semibold">Dark</span>
+                    </button>
+
+                    {/* System Option */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateSettings({ theme: 'system' });
+                        showToast('Theme set to follow system settings');
+                      }}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition text-center ${
+                        settings.theme === 'system'
+                          ? 'bg-white dark:bg-slate-800 border-blue-500 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20 font-bold shadow-xs'
+                          : 'bg-white/70 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <Laptop className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                      <span className="text-xs font-semibold">System</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2.5 leading-relaxed">
+                    Theme choice is saved to local storage and persists across sessions.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: General Preferences */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -409,48 +665,6 @@ export const SettingsModal: React.FC = () => {
                         </button>
                       );
                     })}
-                  </div>
-                </div>
-
-                {/* Theme Selector */}
-                <div className="border-t border-slate-200/60 dark:border-slate-800 pt-3">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Theme
-                  </label>
-                  <div className="grid grid-cols-3 gap-2 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl text-xs font-medium">
-                    <button
-                      onClick={() => updateSettings({ theme: 'light' })}
-                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
-                        settings.theme === 'light'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Sun className="w-3.5 h-3.5" />
-                      Light
-                    </button>
-                    <button
-                      onClick={() => updateSettings({ theme: 'dark' })}
-                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
-                        settings.theme === 'dark'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Moon className="w-3.5 h-3.5" />
-                      Dark
-                    </button>
-                    <button
-                      onClick={() => updateSettings({ theme: 'system' })}
-                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition ${
-                        settings.theme === 'system'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs font-bold'
-                          : 'text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Laptop className="w-3.5 h-3.5" />
-                      System
-                    </button>
                   </div>
                 </div>
               </div>

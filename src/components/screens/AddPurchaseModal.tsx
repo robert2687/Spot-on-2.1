@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Minus, Plus, Camera, Wine, Flame, MapPin, Sparkles, Check, Trash2 } from 'lucide-react';
+import { X, Minus, Plus, Camera, Wine, Flame, MapPin, Sparkles, Check, Trash2, Zap } from 'lucide-react';
 import { useSpotOn } from '../../context/SpotOnContext';
 import { Category, Place, Purchase } from '../../types';
 import { PLACES_LIST } from '../../data/defaultPresets';
@@ -8,7 +8,7 @@ import { formatCurrency } from '../../utils/formatters';
 import { ReceiptScannerModal } from './ReceiptScannerModal';
 
 export const AddPurchaseModal: React.FC = () => {
-  const { isAddModalOpen, closeAddModal, editingPurchase, addPurchase, updatePurchase, deletePurchase, presets, settings } = useSpotOn();
+  const { isAddModalOpen, closeAddModal, editingPurchase, addPurchase, updatePurchase, deletePurchase, presets, settings, purchases } = useSpotOn();
 
   // Form State
   const [category, setCategory] = useState<Category>('alcohol');
@@ -110,6 +110,36 @@ export const AddPurchaseModal: React.FC = () => {
 
   // Filtered presets for active category
   const activePresets = presets.filter((p) => p.category === category);
+
+  // Dynamic Quick Add amounts based on common standards ($10, $20, $50) and recent purchase history
+  const quickAmounts = useMemo(() => {
+    const defaultAmounts = [5, 10, 20, 50];
+
+    // Extract recent purchases (prefer current category, or all)
+    const categoryPurchases = purchases.filter((p) => p.category === category);
+    const pool = (categoryPurchases.length >= 3 ? categoryPurchases : purchases)
+      .slice(0, 20)
+      .map((p) => Number(p.price))
+      .filter((p) => !isNaN(p) && p > 0);
+
+    // Frequency analysis
+    const freq: Record<number, number> = {};
+    pool.forEach((val) => {
+      freq[val] = (freq[val] || 0) + 1;
+    });
+
+    const frequentRecent = Object.keys(freq)
+      .map(Number)
+      .sort((a, b) => freq[b] - freq[a])
+      .slice(0, 3);
+
+    // Merge and sort
+    const combined = Array.from(new Set([...defaultAmounts, ...frequentRecent]))
+      .filter((val) => val > 0 && val <= 300)
+      .sort((a, b) => a - b);
+
+    return combined.slice(0, 6);
+  }, [purchases, category]);
 
   const calculatedTotal = (parseFloat(priceInput) || 0) * Math.max(1, quantity);
 
@@ -267,6 +297,67 @@ export const AddPurchaseModal: React.FC = () => {
                       aria-label="Increase quantity"
                     >
                       <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Add Amounts */}
+              <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-800/80">
+                <div className="flex items-center justify-between px-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 text-amber-500 fill-amber-500/20" />
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Quick Add Amounts
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Common & Recent</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {quickAmounts.map((amt) => {
+                    const isSelected = Math.abs((parseFloat(priceInput) || 0) - amt) < 0.001;
+                    return (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setPriceInput(amt % 1 === 0 ? amt.toString() : amt.toFixed(2))}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300'
+                        }`}
+                      >
+                        {formatCurrency(amt, settings.currencySymbol)}
+                      </button>
+                    );
+                  })}
+
+                  {/* Increment shortcuts (+5, +10) */}
+                  <div className="flex items-center gap-1 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = parseFloat(priceInput) || 0;
+                        const next = Math.max(0, current + 5);
+                        setPriceInput(next % 1 === 0 ? next.toString() : next.toFixed(2));
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-300 active:scale-95 transition"
+                      title="Add 5 to price"
+                    >
+                      +{settings.currencySymbol}5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = parseFloat(priceInput) || 0;
+                        const next = Math.max(0, current + 10);
+                        setPriceInput(next % 1 === 0 ? next.toString() : next.toFixed(2));
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:text-blue-600 dark:hover:text-blue-300 hover:border-blue-300 active:scale-95 transition"
+                      title="Add 10 to price"
+                    >
+                      +{settings.currencySymbol}10
                     </button>
                   </div>
                 </div>

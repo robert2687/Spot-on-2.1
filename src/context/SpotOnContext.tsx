@@ -73,6 +73,11 @@ interface SpotOnContextType {
   hideToast: () => void;
   completeOnboarding: (currency: string, currencySymbol: string, localOnly: boolean, budget: number) => void;
 
+  // Daily Notifications
+  notificationPermission: NotificationPermission | 'unsupported';
+  toggleDailyReminder: (enable: boolean, time?: string) => Promise<boolean>;
+  sendTestNotification: () => Promise<boolean>;
+
   // Google Drive Actions
   loginWithGoogle: () => Promise<boolean>;
   logoutFromGoogle: () => Promise<void>;
@@ -101,6 +106,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   pinCode: '1234',
   theme: 'light',
   onboardingCompleted: true,
+  dailyReminderEnabled: false,
+  dailyReminderTime: '20:00',
 };
 
 const SpotOnContext = createContext<SpotOnContextType | undefined>(undefined);
@@ -177,6 +184,21 @@ export const SpotOnProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [lastAction, setLastAction] = useState<HistoryAction | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
+  // Browser Notification Permission State
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
+
+  // Sync notification permission state
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
   // Initialize Firebase Auth listener
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -227,16 +249,35 @@ export const SpotOnProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [lastDriveSync]);
 
-  // Apply dark mode class to html/document
+  // Apply dark mode class to html/document and listen for system theme changes
   useEffect(() => {
-    const isDark =
-      settings.theme === 'dark' ||
-      (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const updateTheme = () => {
+      const isDark =
+        settings.theme === 'dark' ||
+        (settings.theme === 'system' && mediaQuery.matches);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+
+    updateTheme();
+
+    const handleSystemChange = () => {
+      if (settings.theme === 'system') {
+        updateTheme();
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleSystemChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleSystemChange);
+    };
   }, [settings.theme]);
 
   // Toast Helper
@@ -551,6 +592,145 @@ export const SpotOnProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     [showToast]
   );
 
+  // Daily Notification Reminder Scheduler
+  useEffect(() => {
+    if (!settings.dailyReminderEnabled || typeof window === 'undefined' || !('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission !== 'granted') {
+      return;
+    }
+
+    const checkReminder = () => {
+      const now = new Date();
+      const currentHour = String(now.getHours()).padStart(2, '0');
+      const currentMin = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeStr = `${currentHour}:${currentMin}`;
+      const targetTime = settings.dailyReminderTime || '20:00';
+      const todayDateStr = now.toISOString().split('T')[0];
+
+      const lastSentDate = localStorage.getItem('spoton_last_reminder_date');
+
+      if (currentTimeStr === targetTime && lastSentDate !== todayDateStr) {
+        localStorage.setItem('spoton_last_reminder_date', todayDateStr);
+
+        try {
+          const notification = new Notification('SpotOn Daily Reminder 📝', {
+            body: "Don't forget to track your drinks & tobacco purchases for today!",
+            icon: '/favicon.ico',
+            tag: 'spoton-daily-reminder',
+          });
+
+          notification.onclick = () => {
+            window.focus();
+            openAddModal();
+            notification.close();
+          };
+        } catch (err) {
+          console.warn('Could not show browser notification', err);
+        }
+      }
+    };
+
+    // Check right away and every 25 seconds
+    checkReminder();
+    const interval = setInterval(checkReminder, 25000);
+    return () => clearInterval(interval);
+  }, [settings.dailyReminderEnabled, settings.dailyReminderTime, openAddModal]);
+
+  const toggleDailyReminder = useCallback(
+    async (enable: boolean, time?: string): Promise<boolean> => {
+      if (!enable) {
+        updateSettings({ dailyReminderEnabled: false });
+        showToast('Daily reminder disabled');
+        return true;
+      }
+
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        showToast('Notifications are not supported in this browser environment');
+        return false;
+      }
+
+      const reminderTime = time || settings.dailyReminderTime || '20:00';
+
+      if (Notification.permission === 'granted') {
+        setNotificationPermission('granted');
+        updateSettings({ dailyReminderEnabled: true, dailyReminderTime: reminderTime });
+        showToast(`Daily reminder scheduled for ${reminderTime}`);
+        return true;
+      }
+
+      if (Notification.permission === 'denied') {
+        setNotificationPermission('denied');
+        showToast('Notifications are blocked by your browser settings. Please enable permissions in your browser URL bar.');
+        updateSettings({ dailyReminderEnabled: false });
+        return false;
+      }
+
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        if (permission === 'granted') {
+          updateSettings({ dailyReminderEnabled: true, dailyReminderTime: reminderTime });
+          showToast(`Daily reminder enabled for ${reminderTime}`);
+          return true;
+        } else {
+          updateSettings({ dailyReminderEnabled: false });
+          showToast('Notification permission was not granted.');
+          return false;
+        }
+      } catch (err) {
+        console.error('Error requesting notification permission', err);
+        showToast('Could not request notification permissions.');
+        return false;
+      }
+    },
+    [settings.dailyReminderTime, updateSettings, showToast]
+  );
+
+  const sendTestNotification = useCallback(async (): Promise<boolean> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      showToast('Notifications are not supported in this browser environment');
+      return false;
+    }
+
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      try {
+        perm = await Notification.requestPermission();
+        setNotificationPermission(perm);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (perm !== 'granted') {
+      showToast('Please allow notification permissions to receive daily reminders.');
+      return false;
+    }
+
+    try {
+      const notification = new Notification('SpotOn Daily Reminder 🍷', {
+        body: 'This is a preview reminder to log your daily purchases!',
+        icon: '/favicon.ico',
+        tag: 'spoton-test-reminder',
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        openAddModal();
+        notification.close();
+      };
+
+      showToast('Test notification sent!');
+      return true;
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to send test notification');
+      return false;
+    }
+  }, [openAddModal, showToast]);
+
   const deleteFileFromDrive = useCallback(
     async (fileId: string): Promise<boolean> => {
       try {
@@ -606,6 +786,9 @@ export const SpotOnProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         showToast,
         hideToast,
         completeOnboarding,
+        notificationPermission,
+        toggleDailyReminder,
+        sendTestNotification,
         loginWithGoogle,
         logoutFromGoogle,
         refreshDriveFiles,

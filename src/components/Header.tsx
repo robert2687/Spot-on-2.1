@@ -11,11 +11,17 @@ export const Header: React.FC = () => {
     isGoogleConnected,
     googleUser,
     setActiveTab,
+    showToast,
   } = useSpotOn();
 
+  const isCurrentlyDark =
+    settings.theme === 'dark' ||
+    (settings.theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
   const toggleTheme = () => {
-    const nextTheme = settings.theme === 'dark' ? 'light' : 'dark';
+    const nextTheme = isCurrentlyDark ? 'light' : 'dark';
     updateSettings({ theme: nextTheme });
+    showToast(nextTheme === 'dark' ? 'Switched to Dark Mode' : 'Switched to Light Mode');
   };
 
   return (
@@ -82,11 +88,11 @@ export const Header: React.FC = () => {
 
           <button
             onClick={toggleTheme}
-            title={settings.theme === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode'}
+            title={isCurrentlyDark ? 'Switch to Light mode' : 'Switch to Dark mode'}
             className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             aria-label="Toggle theme"
           >
-            {settings.theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isCurrentlyDark ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
           </button>
 
           <button
